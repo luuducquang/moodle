@@ -25,4 +25,4 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'UTEHY question format';
+$string['pluginname'] = 'UTEHY Chuyển đổi câu hỏi';

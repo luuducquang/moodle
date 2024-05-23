@@ -144,6 +144,8 @@ class qformat_wordquestion extends qformat_wordtable
         $word2xml->set_imagehandling($this->xsltparameters['imagehandling']);
         $xhtmldata = $word2xml->import($filename, $imagesforzipping, true);
 
+        // echo htmlspecialchars($xhtmldata) . '<br/>';
+
         // Convert the returned array of images, if any, into a string.
         $imagestring = "";
         foreach ($imagesforzipping as $imagename => $imagedata) {
@@ -200,6 +202,11 @@ class qformat_wordquestion extends qformat_wordtable
         return ".doc";
     }
 
+    public function mime_type()
+    {
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
     /**
      * Convert the Moodle Question XML into Word-compatible XHTML format
      * just prior to the file being saved
@@ -228,7 +235,8 @@ class qformat_wordquestion extends qformat_wordtable
         $xhtmldata = $mqxml2xhtml->export($content, $this->xsltparameters['pluginname'], $this->xsltparameters['imagehandling']);
 
         // echo $xhtmldata;
-        // die;
+        // echo htmlspecialchars($xhtmldata) . '<br/>';
+        // die();
 
         return $xhtmldata;
     }

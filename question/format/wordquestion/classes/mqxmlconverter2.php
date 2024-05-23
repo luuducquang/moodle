@@ -30,6 +30,7 @@ defined('MOODLE_INTERNAL') || die();
 
 use \booktool_wordimport\wordconverter;
 use moodle_exception;
+use tool_brickfield\local\htmlchecker\common\html_elements;
 
 /**
  * Convert XHTML into XML and vice versa.
@@ -44,6 +45,109 @@ class mqxmlconverter2 extends mqxmlconverter
     /** @var string Stylesheet to import XHTML into question XML */
     private $xhtml2mqxmlstylesheet = __DIR__ . "/xhtml2mqxml.xsl";
 
+    public function convertXHTMLtoXML($xhtmlString) {
+        // Use regular expression to find and replace the <span> element inside <div>
+        $pattern = '/<p>\s*<span lang=".*">([^<]*)<\/span>\s*<\/p>/i';
+        $replacement = '<p>$1</p>';
+
+        $xhtmlString = preg_replace($pattern, $replacement, $xhtmlString);
+
+        // Load XHTML string as SimpleXMLElement
+        $xml = simplexml_load_string($xhtmlString);
+    
+        // Remove XHTML namespace declaration
+        $namespaces = $xml->getDocNamespaces(true);
+        $xhtmlString = str_replace('xmlns="' . $namespaces[''], '', $xhtmlString);
+    
+        // Create the XML structure
+        $xmlString = '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
+        $xmlString .= '<quiz>' . PHP_EOL;
+    
+        foreach ($xml->body->div->table as $table) {
+            $questionText = (string)$table->thead->tr->th[0]->p;
+            $questionContent = (string)$table->thead->tr->th[1]->p;
+            $answersContent = $table->tbody->tr;
+            $answerLenght = (int)count($answersContent);
+            $answerText = (string)$answersContent[count($answersContent) - 1]->td->p;
+    
+            $xmlString .= '<question type="category"><category><text>$course$/</text></category></question><question type="multichoice">' . PHP_EOL;
+            $xmlString .= '<name><text>' . htmlspecialchars(trim($questionText)) . '</text></name>' . PHP_EOL;
+            $xmlString .= '<questiontext format="html"><text><![CDATA[' . $questionContent . ']]></text></questiontext>' . PHP_EOL;
+            $xmlString .= '<generalfeedback format="html"><text/></generalfeedback>' . PHP_EOL;
+            $xmlString .= '<defaultgrade>1.0000000</defaultgrade>' . PHP_EOL;
+            $xmlString .= '<penalty>0.3333333</penalty>' . PHP_EOL;
+            $xmlString .= '<hidden>0</hidden>' . PHP_EOL;
+            $xmlString .= '<idnumber/>' . PHP_EOL;
+            $xmlString .= '<single>true</single>' . PHP_EOL;
+            $xmlString .= '<shuffleanswers>true</shuffleanswers>' . PHP_EOL;
+            $xmlString .= '<answernumbering>ABCD</answernumbering>' . PHP_EOL;
+            $xmlString .= '<correctfeedback format="html"><text><![CDATA[<p>Câu trả lời của bạn đúng</p>]]></text></correctfeedback>' . PHP_EOL;
+            $xmlString .= '<partiallycorrectfeedback format="html"><text/></partiallycorrectfeedback>' . PHP_EOL;
+            $xmlString .= '<incorrectfeedback format="html"><text><![CDATA[<p>Câu trả lời của bạn sai.</p>]]></text></incorrectfeedback>' . PHP_EOL;
+    
+            $answers = ['A', 'B', 'C', 'D'];
+
+            $correctAnswer = (string)$answersContent[$answerLenght - 1]->td[1]->p;
+
+            for ($i = 0; $i < $answerLenght - 1; $i++) {
+                $answer = (string)$answersContent[$i]->td[1]->p;
+                
+                $isCorrect = $answers[$i] === $correctAnswer;
+                $fraction = $isCorrect ? '100' : '0';
+    
+                $xmlString .= '<answer fraction="' . $fraction . '" format="html"><text><![CDATA[' . $answer . ']]></text><feedback format="html"><text/></feedback></answer>' . PHP_EOL;
+            }
+    
+            $xmlString .= '</question>' . PHP_EOL;
+        }
+    
+        $xmlString .= '</quiz>';
+    
+        return $xmlString;
+    }
+    /**
+     * Convert XHTML into Moodle Question XML.
+     *
+     * @param string $xhtmldata XHTML-formatted content
+     * @param string $imagedata Base64-encoded images
+     * @param array $parameters Extra XSLT parameters, if any
+     * @return string Processed XML content
+     */
+    public function import(string $xhtmldata, string $imagedata, array $parameters = array())
+    {
+        global $CFG;
+
+        // Set common parameters for all XSLT transformations. Note that the XSLT processor doesn't support $arguments.
+        $this->xsltparameters = array_merge($this->xsltparameters, $parameters);
+
+        // Check that the XSLT stylesheet exists.
+        if (!file_exists($this->xhtml2mqxmlstylesheet)) {
+            throw new \moodle_exception(get_string('stylesheetunavailable', 'qformat_wordtable', $this->xhtml2mqxmlstylesheet));
+        }
+
+        // echo htmlspecialchars($xhtmldata) . '<br/>' . '------------- <br/>';
+
+
+        // Merge and wrap all the required input data into a single string to simplify XSLT processing.
+        // $xhtmldata = "<pass3Container>\n" . $xhtmldata .
+        //     "<imagesContainer>\n" . $imagedata . "</imagesContainer>\n" .
+        //     $this->get_question_labels() . "\n</pass3Container>";
+
+
+        // // Use the Book tool wordimport plugin to do the actual XSLT transformation.
+        // $word2xml = new wordconverter($this->xsltparameters['pluginname']);
+        // $mqxml = $word2xml->xsltransform($xhtmldata, $this->xhtml2mqxmlstylesheet);
+
+
+        $mqxml = $this->convertXHTMLtoXML($xhtmldata);
+        
+        // echo htmlspecialchars($mqxml) . '<br/>';
+        // die();
+
+        return $mqxml;
+    }  // End import function.
+
+   
     /**
      * Export Moodle Question XML into Word-compatible XHTML
      *
